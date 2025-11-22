@@ -1,0 +1,6 @@
+{
+  "clientId": "YOUR_CLIENT_ID",
+  "username": "YOUR_SF_USERNAME",
+  "loginUrl": "https://login.salesforce.com",
+  "privateKey": "./server.key"
+}
