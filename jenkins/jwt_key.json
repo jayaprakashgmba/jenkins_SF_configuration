@@ -1,6 +1,6 @@
 {
   "clientId": "YOUR_CLIENT_ID",
   "username": "YOUR_SF_USERNAME",
-  "loginUrl": "https://login.salesforce.com",
+  "loginUrl": "https://orgfarm-20b5121211-dev-ed.develop.my.salesforce.com",
   "privateKey": "./server.key"
 }
