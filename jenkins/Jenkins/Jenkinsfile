@@ -1,0 +1,96 @@
+pipeline {
+  agent any
+
+  environment {
+    // these should match your Jenkins credential IDs
+    SF_CLIENT_ID = credentials('sf_client_id')   // secret text
+    SF_USERNAME  = credentials('sf_username')    // secret text
+    SF_LOGIN_URL = 'https://login.salesforce.com' // or credentials('sf_login_url')
+  }
+
+  stages {
+    stage('Checkout') {
+      steps {
+        checkout scm
+      }
+    }
+
+    stage('Install Tools') {
+      steps {
+        sh '''#!/bin/bash
+          # ensure npm global bin in PATH if needed
+          npm install -g @salesforce/cli
+          sf --version
+        '''
+      }
+    }
+
+    stage('Prepare JWT Key') {
+      steps {
+        // write the credential file to disk from Jenkins secret file
+        withCredentials([file(credentialsId: 'sf_jwt_key', variable: 'JWT_KEY_FILE')]) {
+          sh '''
+            ls -l $JWT_KEY_FILE
+            cp "$JWT_KEY_FILE" server.key
+            chmod 400 server.key
+          '''
+        }
+      }
+    }
+
+    stage('Authenticate') {
+      steps {
+        sh '''
+          set -e
+          sf org login jwt --client-id $SF_CLIENT_ID --jwt-key-file server.key --username $SF_USERNAME --instance-url $SF_LOGIN_URL --alias targetOrg
+          sf org list
+        '''
+      }
+    }
+
+    stage('Run Lint & Tests') {
+      steps {
+        // Add any static analysis or apex tests you need
+        sh '''
+          # run Apex tests before deploy (optional)
+          sf project test run --target-org targetOrg --wait 60 || true
+        '''
+      }
+    }
+
+    stage('Check Only (validation)') {
+      when {
+        expression { return env.BRANCH_NAME != 'main' } // adjust for PR validation branches
+      }
+      steps {
+        sh '''
+          # check-only deploy (validation). Adjust path to your source dir
+          sf project deploy start --target-org targetOrg --check-only --verbose
+        '''
+      }
+    }
+
+    stage('Deploy to Org') {
+      when {
+        branch 'main' // only deploy from main (adjust as needed)
+      }
+      steps {
+        sh '''
+          sf project deploy start --target-org targetOrg --verbose
+        '''
+      }
+    }
+  }
+
+  post {
+    always {
+      sh 'sf org display --target-org targetOrg || true'
+    }
+    success {
+      echo 'Deployment succeeded'
+    }
+    failure {
+      echo 'Deployment failed — see logs for error'
+    }
+  }
+}
